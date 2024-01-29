@@ -3,19 +3,23 @@ from cltk import NLP
 from cltk.alphabet.lat import normalize_lat
 from flask_cors import CORS, cross_origin
 
+
 def analyze_text(nlp: NLP, s: str):
-    norm = normalize_lat(s, True, True, True, True)
+    norm = normalize_lat(s, True, True, False, True)
+    norm2 = normalize_lat(s, True, True, True, True)
+    print(norm)
 
     if g.get("cache") is None:
         g.cache = {}
 
-    if norm in g.cache:
-        return norm
-    
-    doc = nlp.analyze(text=s)
-    analysis = []
+    if norm2 in g.cache:
+        return g.cache[norm2]
 
+    doc = nlp.analyze(text=norm)
+    analysis = []
+    print(doc.tokens)
     for word in doc.words:
+
         analysis.append(
             {
                 "parent": word.governor,
@@ -27,7 +31,7 @@ def analyze_text(nlp: NLP, s: str):
                 "category": {
                     str(x[0]).lower(): [str(y) for y in x[1]]
                     for x in word.category.all()
-                }
+                },
                 "features": {
                     str(x[0]).lower(): [str(y) for y in x[1]]
                     for x in word.features.all()
@@ -35,7 +39,7 @@ def analyze_text(nlp: NLP, s: str):
             }
         )
 
-    g.cache[norm] = analysis
+    g.cache[norm2] = analysis
 
     return analysis
 
@@ -64,6 +68,7 @@ TEXT_MAX_LEN = 6666
 app = Flask(__name__)
 cors = CORS(app)
 nlp = NLP(language="lat")
+
 
 @app.route("/")
 def index():

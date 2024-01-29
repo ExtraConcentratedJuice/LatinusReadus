@@ -88,11 +88,14 @@
             <button class="button is-large" on:click={submitText} bind:this={submitButton}>Analyze</button>
         </div>
     </div>
-    <div class="column">
+    <article class="message">
         {#each words as word}
         {#if word.pos !== "punctuation"}
-        <div class="box">
-            <h3 class="has-text-weight-bold">{word.word}</h3>
+        <div class="card">
+            <header class="message-header">
+            <h3 class="has-text-weight-bold">{word.word} (Lemm. {word.lemma})</h3>
+            </header>
+            <div class="message-body">
 
             <div class="tags">
                 <span class="tag is-info">{word.pos}</span>
@@ -108,7 +111,6 @@
             </div>
             <p>{word.definition}</p>
 
-            <p>Lemma: {word.lemma}</p>
             <p>Features</p>
             <ul>
                 {#each Object.entries(word.features) as [name, val]}
@@ -123,12 +125,11 @@
                 {/each}
             </ul>
             {/if}
-
+            </div>
         </div>
-        <hr>
         {/if}
         {/each}
-    </div>
+    </article>
 </div>
 
 </div>
