@@ -24,6 +24,10 @@ def analyze_text(nlp: NLP, s: str):
                 "word": word.string,
                 "definition": word.definition,
                 "lemma": word.lemma,
+                "category": {
+                    str(x[0]).lower(): [str(y) for y in x[1]]
+                    for x in word.category.all()
+                }
                 "features": {
                     str(x[0]).lower(): [str(y) for y in x[1]]
                     for x in word.features.all()

@@ -1,3 +1,9 @@
+<style>
+    * {
+    font-family: 'Cinzel', serif; 
+
+    }
+</style>
 <script>
     import lex from "lexical";
 	import { createEventDispatcher } from "svelte";
@@ -50,11 +56,13 @@
                 }
             }
             root.append(paragraph);
+            readerDiv.classList.remove("is-hidden");
         });
     }
 
     async function submitText() {
-        submitButton.disabled = true;
+        //submitButton.disabled = true;
+        submitButton.classList.add("is-loading");
 
         const resp = await fetch("http://127.0.0.1:5000/analyze", {
             headers: new Headers({'content-type': 'application/json'}),
@@ -62,28 +70,44 @@
             body: JSON.stringify({"text": textInput.value})
         })
 
-        submitButton.disabled = false;
+        submitButton.classList.remove("is-loading");
+        //submitButton.disabled = false;
 
         const analysis = await resp.json();
         updateAnalysis(analysis);
     }
 
 </script>
-
-<div class="pure-g">
-    <div class="pure-u-2-3">
-        <div id="reader" bind:this={readerDiv} style="font-family: 'Cinzel', serif;  font-size:22px"></div>
+<div class="container">
+<h1 class="title is-size-1 mt-4" style="font-family: 'Cinzel Decorative', serif;">Latinus Readus</h1>
+<div class="columns">
+    <div class="column is-three-quarters">
+        <div class="content is-hidden" id="reader" bind:this={readerDiv} style="font-size:24px"></div>
         <div>
-            <textarea id="text-input" placeholder="Enter Latin text to analyze..." bind:this={textInput}></textarea>
-            <button on:click={submitText} bind:this={submitButton}>Analyze</button>
+            <textarea style="width: 100%;" class="textarea is-large field" id="text-input" placeholder="Enter Latin text to analyze..." bind:this={textInput}></textarea>
+            <button class="button is-large" on:click={submitText} bind:this={submitButton}>Analyze</button>
         </div>
     </div>
-    <div class="pure-u-1-3">
+    <div class="column">
         {#each words as word}
         {#if word.pos !== "punctuation"}
-        <div>
-            <p>Part of Speech: {word.pos}</p>
-            <p>Word: {word.word}</p>
+        <div class="box">
+            <h3 class="has-text-weight-bold">{word.word}</h3>
+
+            <div class="tags">
+                <span class="tag is-info">{word.pos}</span>
+                {#if word.features.case}
+                <span class="tag is-info">{word.features.case}</span>
+                {/if}
+                {#if word.features.gender}
+                <span class="tag is-info">{word.features.gender}</span>
+                {/if}
+                {#if word.features.number}
+                <span class="tag is-info">{word.features.number}</span>
+                {/if}
+            </div>
+            <p>{word.definition}</p>
+
             <p>Lemma: {word.lemma}</p>
             <p>Features</p>
             <ul>
@@ -91,9 +115,21 @@
                 <li>{name}: {val}</li>
                 {/each}
             </ul>
+            {#if word.category}
+            <p>Category</p>
+            <ul>
+                {#each Object.entries(word.category) as [name, val]}
+                <li>{name}: {val}</li>
+                {/each}
+            </ul>
+            {/if}
+
         </div>
         <hr>
         {/if}
         {/each}
     </div>
 </div>
+
+</div>
+
