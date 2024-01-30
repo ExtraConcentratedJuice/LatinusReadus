@@ -1,178 +1,256 @@
-<style>
-    * {
-    font-family: 'Cinzel', serif; 
-
-    }
-</style>
 <script>
-    import lex from "lexical";
-	import { createEventDispatcher } from "svelte";
-	import { onMount } from "svelte";
+	import lex from 'lexical';
+	import { createEventDispatcher } from 'svelte';
+	import { onMount } from 'svelte';
+	import { parse } from 'svelte/compiler';
 
-    let readerDiv;
-    let submitButton;
-    let textInput;
-    let editor;
-    let syntaxTree;
-    let words = [];
+	let readerDiv;
+	let submitButton;
+	let textInput;
+	let editor;
+	let syntaxTree;
+	let syntaxTreeContainer;
+	let parsedSentence;
+	let words = [];
 
-    onMount(() => {
-        const config = {
-            namespace: "editor",
-            onError: console.error,
-        };
+	onMount(() => {
+		const config = {
+			namespace: 'editor',
+			onError: console.error
+		};
 
-        editor = lex.createEditor(config);
+		editor = lex.createEditor(config);
 
-        editor.setRootElement(readerDiv);
+		editor.setRootElement(readerDiv);
 
-        editor.registerCommand(lex.SELECTION_CHANGE_COMMAND, () => {
-            const selection = lex.$getSelection();
+		editor.registerCommand(
+			lex.SELECTION_CHANGE_COMMAND,
+			() => {
+				const selection = lex.$getSelection();
+				lex.$getCharacterOffsets;
+				console.log(selection);
 
-            if (selection.getNodes().length > 0) {
-                words = [words.find(x => x.index === selection.getNodes()[0].index),
-                 ...words.filter(x => x.index !== selection.getNodes()[0].index)];
-            }            
-        }, lex.COMMAND_PRIORITY_NORMAL);
-    })
+				if (selection.getNodes().length > 0) {
+					console.log(selection.getNodes());
+					words = [
+						words.find((x) => x.index === selection.getNodes()[0].word.index),
+						...words.filter((x) => x.index !== selection.getNodes()[0].word.index)
+					];
 
+					let nodeIndex = selection.getNodes()[0].word.index;
 
-    function updateAnalysis(analysis) {
-        words = analysis;
-        editor.update(() => {
-            function makeWord(word) {
-                const node = lex.$createTextNode(word.word);
-                node.word = word;
-                return node
-            }
+					console.log(nodeIndex);
 
-            const root = lex.$getRoot();
+					if (
+						nodeIndex < parsedSentence[0].index ||
+						nodeIndex > parsedSentence[parsedSentence.length - 1].index
+					) {
+						parsedSentence = getSentence(nodeIndex);
+						syntaxTree.innerHTML = buildSd(words, parsedSentence);
+						Annodoc.activate(Config.bratCollData, Collections.listing);
+					}
+				}
+			},
+			lex.COMMAND_PRIORITY_NORMAL
+		);
+	});
 
-            root.clear();
+	function getSentence(sentenceWordIndex) {
+		let word = words.find((x) => x.index === sentenceWordIndex);
+		if (word == null) return null;
 
-            lex.$setSelection(lex.$createNodeSelection());
+		let sentence = [];
+		sentence.push(word);
+		while (
+			word.index > 0 &&
+			(word = words.find((x) => x.index === word.index - 1)) != null &&
+			(word.pos != 'punctuation' || word.word != '.')
+		) {
+			sentence = [word, ...sentence];
+		}
+		word = words.find((x) => x.index === sentenceWordIndex);
+		while (
+			(word = words.find((x) => x.index === word.index + 1)) != null &&
+			(word.pos != 'punctuation' || word.word != '.')
+		) {
+			sentence.push(word);
+		}
 
-            const paragraph = lex.$createParagraphNode();
+		if (word != null && word.pos == 'punctuation' && word.word == '.') {
+			sentence.push(word);
+		}
 
-            for (let i = 0; i < analysis.length; i++) {
-                const word = analysis[i];
+		return sentence;
+	}
 
-                if (word.pos === "punctuation") {
-                    paragraph.append(makeWord(word));
-                } else {
-                    if (i !== 0) {
-                        paragraph.append(lex.$createTextNode(" "));
-                    }
-                    paragraph.append(makeWord(word));
-                }
-            }
+	function titleCase(string) {
+		return string[0].toUpperCase() + string.slice(1).toLowerCase();
+	}
 
-            root.append(paragraph);
-            readerDiv.classList.remove("is-hidden");
-        });
-    }
+	function buildSd(allWords, sentence) {
+		let sd = '';
+		for (let word of sentence) {
+			let features = '';
+			if (Object.entries(word.features).length > 0) {
+				features = `[${Object.entries(word.features)
+					.map((x) => `${titleCase(x[0])}=${x[1].map(x => titleCase(x)).join(",")}`)
+					.join('|')}]`;
+			}
+			sd += `${word.word}/${word.upos}${features} `;
+		}
+		sd += '\n';
+		let lowIndex = sentence[0].index;
+		for (let word of sentence) {
+			if (word.parentRelation == 'ROOT' || word.parentRelation == 'punct') continue;
 
-    async function submitText() {
-        //submitButton.disabled = true;
-        submitButton.classList.add("is-loading");
+			sd += `${word.parentRelation}(${word.word}-${word.index - lowIndex + 1}, ${allWords.find((x) => x.index === word.parent).word}-${word.parent - lowIndex + 1})\n`;
+		}
+		console.log(sd);
+		return sd;
+	}
 
-        const resp = await fetch("http://127.0.0.1:5000/analyze", {
-            headers: new Headers({'content-type': 'application/json'}),
-            method: "POST",
-            body: JSON.stringify({"text": textInput.value})
-        })
+	function updateAnalysis(analysis) {
+		words = analysis;
+		editor.update(() => {
+			function makeWord(word) {
+				const node = lex.$createTextNode(word.word);
+				node.toggleUnmergeable();
+				node.word = word;
+				return node;
+			}
 
-        submitButton.classList.remove("is-loading");
-        //submitButton.disabled = false;
+			const root = lex.$getRoot();
 
-        const analysis = await resp.json();
-        updateAnalysis(analysis);
-    }
+			root.clear();
 
+			const paragraph = lex.$createParagraphNode();
+
+			for (let i = 0; i < analysis.length; i++) {
+				const word = analysis[i];
+
+				if (word.pos === 'punctuation') {
+					paragraph.append(makeWord(word));
+				} else {
+					if (i !== 0) {
+						paragraph.append(lex.$createTextNode(' '));
+					}
+					paragraph.append(makeWord(word));
+				}
+			}
+
+			root.append(paragraph);
+			readerDiv.classList.remove('is-hidden');
+			parsedSentence = getSentence(12);
+			syntaxTree.innerHTML = buildSd(words, parsedSentence);
+			Annodoc.activate(Config.bratCollData, Collections.listing);
+			syntaxTreeContainer.hidden = false;
+		});
+	}
+
+	async function submitText() {
+		//submitButton.disabled = true;
+		submitButton.classList.add('is-loading');
+
+		const resp = await fetch('http://127.0.0.1:5000/analyze', {
+			headers: new Headers({ 'content-type': 'application/json' }),
+			method: 'POST',
+			body: JSON.stringify({ text: textInput.value })
+		});
+
+		submitButton.classList.remove('is-loading');
+		//submitButton.disabled = false;
+
+		const analysis = await resp.json();
+		updateAnalysis(analysis);
+	}
 </script>
+
 <div class="container">
-<h1 class="title is-size-1 mt-4" style="font-family: 'Cinzel Decorative', serif;">Latinus Readus</h1>
-<div class="columns">
-    <div class="column is-three-quarters">
-        <div class="sd-parse mb-4" id="syntax-tree" bind:this={syntaxTree}>
-            Avunculus/NOUN meus/ADJ Miseni/PROPN erat/AUX classis/NOUN praefectus/VERB ./PUNCT Eo/DET die/NOUN ,/PUNCT quo/PRON tantae/DET cladis/NOUN initium/NOUN fuit/AUX ,/PUNCT avunculus/NOUN foris/ADV iacebat/VERB libris/NOUN que/CCONJ studebat/VERB ./PUNCT
-            nsubj(Avunculus-1, Miseni-3)
-            det(meus-2, Avunculus-1)
-            ROOT(Miseni-3, Miseni-3)
-            cop(erat-4, Miseni-3)
-            nmod(classis-5, praefectus-6)
-            nsubj(praefectus-6, Miseni-3)
-            punct(.-7, Miseni-3)
-            det(Eo-8, die-9)
-            obl(die-9, iacebat-19)
-            punct(,-10, initium-14)
-            obl(quo-11, initium-14)
-            amod(tantae-12, cladis-13)
-            nmod(cladis-13, initium-14)
-            nsubj(initium-14, iacebat-19)
-            cop(fuit-15, initium-14)
-            punct(,-16, initium-14)
-            nsubj(avunculus-17, iacebat-19)
-            advmod(foris-18, iacebat-19)
-            ROOT(iacebat-19, iacebat-19)
-            obl:arg(libris-20, studebat-22)
-            cc(que-21, studebat-22)
-            conj(studebat-22, iacebat-19)
-            punct(.-23, iacebat-19)
-            </div>
-            
-        <div class="content is-hidden" id="reader" bind:this={readerDiv} style="font-size:24px"></div>
-        <div>
-            <textarea style="width: 100%;" class="textarea is-large field" id="text-input" placeholder="Enter Latin text to analyze..." bind:this={textInput}></textarea>
-            <button class="button is-large" on:click={submitText} bind:this={submitButton}>Analyze</button>
-        </div>
-    </div>
-    <article class="message">
-        {#each words as word}
-        {#if word.pos !== "punctuation"}
-        <div class="card mb-2">
-            <header class="message-header">
-            <p class="has-text-weight-bold">{word.word} (Lemm. {word.lemma})
-            <br/><small class="has-text-weight-bold">{word.pos}</small>
-            </p>
-            </header>
-            <div class="message-body">
-            {#if word.features && Object.entries(word.features).length > 0}
-            <div class="tags">
-                {#if word.features.mood}
-                <span class="tag is-info">{word.features.mood}</span>
-                {/if}
-                {#if word.features.case}
-                <span class="tag is-info">{word.features.case}</span>
-                {/if}
-                {#if word.features.gender}
-                <span class="tag is-info">{word.features.gender}</span>
-                {/if}
-                {#if word.features.number}
-                <span class="tag is-info">{word.features.number}</span>
-                {/if}
-                {#if word.features.person}
-                <span class="tag is-info">{word.features.person}</span>
-                {/if}
-                {#if word.features.tense}
-                <span class="tag is-info">{word.features.tense}</span>
-                {/if}
-                {#if word.features.verbform}
-                <span class="tag is-info">{word.features.verbform}</span>
-                {/if}
-                {#if word.features.voice}
-                <span class="tag is-info">{word.features.voice}</span>
-                {/if}
-            </div>
-            {/if}
-            
-            {#if word.parent !== -1}
-            <p>Parent: {words.find(x => x.index === word.parent).word} ({word.parentRelation})</p>
-            {/if}
+	<h1 class="title is-size-1 mt-4" style="font-family: 'Cinzel Decorative', serif;">
+		Latinus Readus
+	</h1>
+	<div class="columns">
+		<div class="column is-three-quarters">
+			<div hidden="true" bind:this={syntaxTreeContainer}>
+				<div class="sd-parse mb-4" id="syntax-tree" bind:this={syntaxTree}></div>
+			</div>
 
-            <p style="max-height:8em; overflow-y: auto;">{word.definition}</p>
+			<div class="content is-hidden" id="reader" bind:this={readerDiv} style="font-size:26px"></div>
+			{#if words.length > 0}
+				<hr />
+			{/if}
+			<div>
+				<textarea
+					style="width: 100%;border: none transparent;border-color: transparent;outline: none; border-radius: 0px;"
+					class="textarea is-large field"
+					id="text-input"
+					placeholder="Enter Latin text to analyze..."
+					bind:this={textInput}
+				></textarea>
+				<button
+					class="button is-large mt-4"
+					style="border-radius: 0px;"
+					on:click={submitText}
+					bind:this={submitButton}>Analyze</button
+				>
+			</div>
+		</div>
+		<article class="message">
+			{#each words as word}
+				{#if word.pos !== 'punctuation'}
+					<div class="card mb-2">
+						<header class="message-header">
+							<p class="has-text-weight-bold">
+								{word.word} (Lemm. {word.lemma})
+								<br /><small class="has-text-weight-bold"
+									><a href="https://universaldependencies.org/u/pos/{word.upos}">{word.pos}</a
+									></small
+								>
+							</p>
+						</header>
 
-            <!--
+						<div class="message-body">
+							{#if word.features && Object.entries(word.features).length > 0}
+								<div class="tags">
+									{#if word.features.mood}
+										<span class="tag is-info">{word.features.mood}</span>
+									{/if}
+									{#if word.features.case}
+										<span class="tag is-info">{word.features.case}</span>
+									{/if}
+									{#if word.features.gender}
+										<span class="tag is-info">{word.features.gender}</span>
+									{/if}
+									{#if word.features.number}
+										<span class="tag is-info">{word.features.number}</span>
+									{/if}
+									{#if word.features.person}
+										<span class="tag is-info">{word.features.person}</span>
+									{/if}
+									{#if word.features.tense}
+										<span class="tag is-info">{word.features.tense}</span>
+									{/if}
+									{#if word.features.verbform}
+										<span class="tag is-info">{word.features.verbform}</span>
+									{/if}
+									{#if word.features.voice}
+										<span class="tag is-info">{word.features.voice}</span>
+									{/if}
+								</div>
+							{/if}
+
+							<p style="max-height:8em; overflow-y: auto;">{word.definition}</p>
+							{#if word.parent !== -1}
+								<p class="mt-2">
+									Parent: {words.find((x) => x.index === word.parent).word} (<a
+										href="https://universaldependencies.org/u/dep/{word.parentRelation.replace(
+											':',
+											'-'
+										)}">{word.parentRelation}</a
+									>)
+								</p>
+							{/if}
+							<!--
 
             <p>Features</p>
             <ul>
@@ -189,12 +267,16 @@
             </ul>
             {/if}
             -->
-            </div>
-        </div>
-        {/if}
-        {/each}
-    </article>
+						</div>
+					</div>
+				{/if}
+			{/each}
+		</article>
+	</div>
 </div>
 
-</div>
-
+<style>
+	* {
+		font-family: 'Cinzel', serif;
+	}
+</style>

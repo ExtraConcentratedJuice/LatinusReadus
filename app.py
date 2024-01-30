@@ -3,9 +3,12 @@ from flask import Flask, request, jsonify, g
 from cltk import NLP
 from cltk.dependency.tree import DependencyTree
 from cltk.tokenizers.processes import LatinTokenizationProcess
+from cltk.lemmatize.processes import LatinLemmatizationProcess
 from cltk.alphabet.lat import normalize_lat
+from pywords.lookup import match_word, get_dictionary_string
 from flask_cors import CORS, cross_origin
 from pprint import pprint
+
 
 def generate_sd(doc, words):
     s = " ".join([f"{word.string}/{word.upos}" for word in words]) + "\n"
@@ -14,7 +17,7 @@ def generate_sd(doc, words):
             continue
 
         s += f"{word.dependency_relation}({word.string}-{word.index_token}, {next(x for x in doc.words if x.index_token == word.governor).string}-{word.governor})\n"
-    
+
     return s
 
 
@@ -34,16 +37,21 @@ def analyze_text(nlp: NLP, s: str):
     analysis = []
     print(doc.tokens)
     for word in doc.words:
-        #print(word.governor)
-        #print(f"{word.string} {word.index_token}")
+        # print(word.governor)
+        # print(f"{word.string} {word.index_token}")
         analysis.append(
             {
                 "index": word.index_token,
                 "parent": word.governor,
                 "parentRelation": word.dependency_relation,
+                "xpos": str(word.xpos) if word.xpos else None,
+                "upos": str(word.upos) if word.upos else None,
                 "pos": str(word.pos) if word.pos else None,
                 "word": word.string,
-                "definition": word.definition,
+                "definition": "\n===========\n".join(
+                    [get_dictionary_string(m, False) for m in match_word(word.lemma.lower())]
+                ),
+                "definition_long": word.definition,
                 "lemma": word.lemma,
                 "category": {
                     str(x[0]).lower(): [str(y) for y in x[1]]
@@ -55,7 +63,6 @@ def analyze_text(nlp: NLP, s: str):
                 },
             }
         )
-    
 
     print(generate_sd(doc, doc.sentences[0].words))
     print(generate_sd(doc, [*doc.sentences[0].words, *doc.sentences[1].words]))
@@ -93,6 +100,9 @@ cors = CORS(app)
 nlp = NLP(language="lat")
 
 nlp.pipeline.processes.insert(1, LatinTokenizationProcess)
+#nlp.pipeline.processes.insert(2, LatinLemmatizationProcess)
+
+print(nlp.pipeline.processes)
 
 
 @app.route("/")
