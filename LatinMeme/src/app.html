@@ -4,13 +4,76 @@
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+		<link rel="stylesheet" type="text/css" href="/css/style.css"/>
+		<link rel="stylesheet" type="text/css" href="/css/style-vis.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel&family=Cinzel+Decorative&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+<script src="/js/brat/lib/head.load.min.js"></script>
+
+<script type="text/javascript">
+	head.js(
+		// External libraries
+		// DZ: Copied from embedding.html. I don't know which one is needed for what, so I'm currently keeping them all.
+		'js/brat/lib/jquery.min.js',
+		'js/brat/lib/jquery.svg.min.js',
+		'js/brat/lib/jquery.svgdom.min.js',
+		//'js/brat/lib/jquery.timeago.js',
+		'js/brat/lib/jquery-ui.min.js',
+		'js/brat/lib/waypoints.min.js',
+		//'js/brat/lib/jquery.address.min.js'
+	);
+</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
+	<script type="text/javascript">
+		var root = ''; // filled in by jekyll
+		head.js(
+			// We assume that external jsraries such as jquery.min.js have already been loaded outside!
+			// (See _layouts/base.html.)
+	
+			// brat helper modules
+			'js/brat/src/configuration.js',
+			'js/brat/src/util.js',
+			'js/brat/src/annotation_log.js',
+			'js/brat/lib/webfont.js',
+			// brat modules
+			'js/brat/src/dispatcher.js',
+			'js/brat/src/url_monitor.js',
+			'js/brat/src/visualizer.js',
+	
+			// embedding configuration
+			'js/brat/cfg/config.js',
+			// project-specific collection data
+			'js/brat/cfg/collections.js',
+	
+			// Annodoc
+			'js/brat/lib/annodoc.js',
+	
+			// NOTE: non-local jsraries
+			//'https://spyysalo.github.io/conllu.js/conllu.js'
+		);
+	
+		var webFontURLs = [
+			'css/fonts/Astloch-Bold.ttf',
+			'css/fonts/PT_Sans-Caption-Web-Regular.ttf',
+			//'fonts/jseration_Sans-Regular.ttf'
+		];
+	
+	
+		head.ready(function() {	
+			// mark current collection (filled in by Jekyll)
+			Collections.listing['_current'] = 'la';
+	
+		// perform all embedding and support functions
+		Annodoc.activate(Config.bratCollData, Collections.listing);
+		});
+	</script>
+	
+	
 </html>

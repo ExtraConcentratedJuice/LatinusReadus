@@ -1,10 +1,25 @@
+from cltk.core import Word
 from flask import Flask, request, jsonify, g
 from cltk import NLP
+from cltk.dependency.tree import DependencyTree
+from cltk.tokenizers.processes import LatinTokenizationProcess
 from cltk.alphabet.lat import normalize_lat
 from flask_cors import CORS, cross_origin
+from pprint import pprint
+
+def generate_sd(doc, words):
+    s = " ".join([f"{word.string}/{word.upos}" for word in words]) + "\n"
+    for word in words:
+        if str(word.pos) == "ROOT":
+            continue
+
+        s += f"{word.dependency_relation}({word.string}-{word.index_token}, {next(x for x in doc.words if x.index_token == word.governor).string}-{word.governor})\n"
+    
+    return s
 
 
 def analyze_text(nlp: NLP, s: str):
+    s = s.replace("\r\n", " ").replace("\n", " ")
     norm = normalize_lat(s, True, True, False, True)
     norm2 = normalize_lat(s, True, True, True, True)
     print(norm)
@@ -19,9 +34,11 @@ def analyze_text(nlp: NLP, s: str):
     analysis = []
     print(doc.tokens)
     for word in doc.words:
-
+        #print(word.governor)
+        #print(f"{word.string} {word.index_token}")
         analysis.append(
             {
+                "index": word.index_token,
                 "parent": word.governor,
                 "parentRelation": word.dependency_relation,
                 "pos": str(word.pos) if word.pos else None,
@@ -38,8 +55,14 @@ def analyze_text(nlp: NLP, s: str):
                 },
             }
         )
+    
+
+    print(generate_sd(doc, doc.sentences[0].words))
+    print(generate_sd(doc, [*doc.sentences[0].words, *doc.sentences[1].words]))
 
     g.cache[norm2] = analysis
+    tree = DependencyTree.to_tree(doc.sentences[0].words)
+    pprint(tree.get_dependencies())
 
     return analysis
 
@@ -68,6 +91,8 @@ TEXT_MAX_LEN = 6666
 app = Flask(__name__)
 cors = CORS(app)
 nlp = NLP(language="lat")
+
+nlp.pipeline.processes.insert(1, LatinTokenizationProcess)
 
 
 @app.route("/")
